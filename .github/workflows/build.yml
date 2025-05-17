@@ -52,7 +52,7 @@ jobs:
           python -m build --wheel --no-isolation
 
       - name: Upload Wheel as Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: nunchaku-wheel
           path: dist/
