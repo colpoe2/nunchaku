@@ -22,7 +22,19 @@ jobs:
       - name: Install Visual Studio Build Tools with full C++ support
         shell: cmd
         run: |
-          choco install --no-progress visualstudio2022buildtools -y --package-parameters="'--add Microsoft.VisualStudio.Workload.NativeDesktop --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.20H2 --includeRecommended'"
+          echo "Starting Visual Studio Build Tools installation..."
+          choco install --no-progress visualstudio2022buildtools -y --package-parameters="'--add Microsoft.VisualStudio.Workload.NativeDesktop --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041 --includeRecommended --norestart --quiet'"
+          set CHOC_EXIT_CODE=%ERRORLEVEL%
+          echo "Chocolatey install command finished with exit code: %CHOC_EXIT_CODE%"
+      
+          if %CHOC_EXIT_CODE% == 3010 (
+            echo "Installation successful, reboot pending (exit code 3010). Treating as success for CI."
+            exit /b 0
+          ) else if %CHOC_EXIT_CODE% NEQ 0 (
+            echo "Chocolatey installation failed with a critical error. Exit code: %CHOC_EXIT_CODE%"
+            exit /b %CHOC_EXIT_CODE%
+          )
+          echo "Chocolatey installation successful without requiring reboot or reboot was handled."
       
       - name: Check VS Build Tools Path
         shell: cmd
