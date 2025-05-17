@@ -34,14 +34,19 @@ jobs:
           pip install torch==2.7.0+cu126 torchvision==0.22.0+cu126 torchaudio==2.7.0+cu126 --extra-index-url https://download.pytorch.org/whl/cu126 
 
       - name: Install Visual Studio Build Tools
+        shell: cmd
         run: |
           choco install --no-progress visualstudio2022buildtools -y
+
+      - name: Check VS Build Tools Path
         shell: cmd
+        run: |
+          dir "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
 
       - name: Set Environment Variables for MSVC
         shell: cmd
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
           echo MSVC environment set up.
 
       - name: Build Nunchaku in Develop Mode
