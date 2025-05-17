@@ -24,10 +24,11 @@ jobs:
         run: |
           choco install --no-progress visualstudio2022buildtools -y
 
-      - name: Check VS Build Tools Path
+      - name: Find vcvarsall.bat
         shell: cmd
         run: |
-          dir "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
+          echo Searching for vcvarsall.bat...
+          where /r "C:\Program Files (x86)\Microsoft Visual Studio" vcvarsall.bat
 
       - name: Set Environment Variables for MSVC
         shell: cmd
