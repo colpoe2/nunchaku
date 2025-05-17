@@ -1,0 +1,58 @@
+name: Build Nunchaku on Windows (CUDA 12.6, Python 3.12, Torch 2.7)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows-cuda:
+    name: Build Nunchaku (Windows + CUDA 12.6)
+    runs-on: windows-latest
+    env:
+      NUNCHAKU_INSTALL_MODE: ALL
+      NUNCHAKU_BUILD_WHEELS: 1
+    steps:
+      - name: Checkout Repository with Submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install pip dependencies
+        run: |
+          pip install --upgrade pip
+          pip install ninja wheel diffusers transformers accelerate sentencepiece protobuf huggingface_hub peft opencv-python gradio spaces GPUtil
+
+      - name: Install PyTorch 2.7 with CUDA 12.6
+        run: |
+          pip install torch==2.7.0+cu126 torchvision==0.22.0+cu126 torchaudio==2.7.0+cu126 --extra-index-url https://download.pytorch.org/whl/cu126 
+
+      - name: Install Visual Studio Build Tools
+        run: |
+          choco install --no-progress visualstudio2022buildtools -y
+        shell: cmd
+
+      - name: Set Environment Variables for MSVC
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+          echo "MSVC environment set up."
+
+      - name: Build Nunchaku in Develop Mode
+        run: |
+          python setup.py develop
+
+      - name: Build Wheel for Distribution
+        run: |
+          python -m build --wheel --no-isolation
+
+      - name: Upload Wheel as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: nunchaku-wheel
+          path: dist/
