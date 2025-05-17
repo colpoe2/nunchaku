@@ -137,7 +137,7 @@ jobs:
       - name: Install PyTorch (CUDA ${{ env.CUDA_VERSION_MAJOR_MINOR }})
         run: |
           pip install torch==${{ env.TORCH_VERSION }}+${{ env.TORCH_CUDA_SUFFIX }} torchvision==${{ env.TORCHVISION_VERSION }}+${{ env.TORCH_CUDA_SUFFIX }} torchaudio==${{ env.TORCHAUDIO_VERSION }}+${{ env.TORCH_CUDA_SUFFIX }} --extra-index-url https://download.pytorch.org/whl/${{ env.TORCH_CUDA_SUFFIX }}
-          python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"N/A\"}')"
+          python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(torch.cuda.is_available())"
 
 
       - name: Build Nunchaku in Develop Mode
