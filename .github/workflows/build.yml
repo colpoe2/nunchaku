@@ -8,7 +8,8 @@ on:
 
 jobs:
   build-windows-cuda:
-    name: Build Nunchaku (Windows + CUDA ${{ env.CUDA_VERSION_MAJOR_MINOR }}) # 使用env变量
+    # 修正: 直接使用版本号或简化名称，而不是在 job name 中引用同一 job 的 env 变量
+    name: Build Nunchaku (Windows + CUDA 12.6)
     runs-on: windows-latest
     env:
       NUNCHAKU_INSTALL_MODE: ALL
@@ -17,10 +18,10 @@ jobs:
       CUDA_VERSION_MAJOR_MINOR: "12.6"
       PYTHON_VERSION: "3.12"
       # PyTorch 版本和CUDA后缀 (请确保这个PyTorch版本和CUDA组合是有效的)
-      TORCH_VERSION: "2.7.0" # 假设这是你需要的版本
+      TORCH_VERSION: "2.7.0" 
       TORCH_CUDA_SUFFIX: "cu126" # 对应CUDA 12.6
-      TORCHVISION_VERSION: "0.22.0" # 假设
-      TORCHAUDIO_VERSION: "2.7.0" # 假设
+      TORCHVISION_VERSION: "0.22.0" 
+      TORCHAUDIO_VERSION: "2.7.0" 
 
     steps:
       - name: Checkout Repository with Submodules
@@ -49,7 +50,8 @@ jobs:
         run: |
           set CUDA_INSTALLER_FILENAME=cuda_installer.exe
           REM **重要**: 请将下面的URL替换为NVIDIA官方CUDA Toolkit 12.6.0 (例如 February 2024 Update 1) 的稳定下载链接
-          REM 例如: https://developer.download.nvidia.com/compute/cuda/12.6.0/local_installers/cuda_12.6.0_560.74_windows.exe
+          REM 示例 URL 结构: https://developer.download.nvidia.com/compute/cuda/<version>/local_installers/cuda_<full_version>_windows.exe
+          REM 对于 CUDA 12.6.0 (假设版本号为 12.6.0，驱动版本为 560.74 - 你需要确认实际的驱动版本和文件名)
           set CUDA_DOWNLOAD_URL=https://developer.download.nvidia.com/compute/cuda/${{ env.CUDA_VERSION_MAJOR_MINOR }}.0/local_installers/cuda_${{ env.CUDA_VERSION_MAJOR_MINOR }}.0_560.74_windows.exe
           
           echo "Downloading CUDA Toolkit from %CUDA_DOWNLOAD_URL% ..."
@@ -60,16 +62,19 @@ jobs:
           )
           
           echo "Installing CUDA Toolkit silently..."
-          REM -s 参数用于静默安装。这会安装默认的toolkit组件。
-          REM 如果需要更精细的控制，查阅特定CUDA安装程序的文档以获取更详细的静默安装选项。
           %CUDA_INSTALLER_FILENAME% -s -noreboot
           set CUDA_INSTALL_EXIT_CODE=%ERRORLEVEL%
           echo "CUDA Toolkit installation finished with exit code: %CUDA_INSTALL_EXIT_CODE%"
+          
           REM 对于CUDA安装程序, 0 通常表示成功。3010也可能表示需要重启。
-          REM 如果nvcc可用，即使是3010，对于CI也可能接受。目前我们只接受0。
+          REM 如果nvcc可用，即使是3010，对于CI也可能接受。
           if %CUDA_INSTALL_EXIT_CODE% NEQ 0 (
-            echo "CUDA Toolkit installation failed or requires attention."
-            exit /b %CUDA_INSTALL_EXIT_CODE% 
+            if %CUDA_INSTALL_EXIT_CODE% == 3010 (
+              echo "CUDA Toolkit installation successful, reboot pending (exit code 3010). Treating as success for CI."
+            ) else (
+              echo "CUDA Toolkit installation failed with exit code: %CUDA_INSTALL_EXIT_CODE%."
+              exit /b %CUDA_INSTALL_EXIT_CODE% 
+            )
           )
           
           echo "Setting CUDA environment variables..."
@@ -80,8 +85,6 @@ jobs:
           echo CUDA_HOME=%CUDA_PATH_VALUE%>>%GITHUB_ENV%
 
           echo "Verifying nvcc installation (using full path initially)..."
-          REM GITHUB_PATH的更新在同一脚本块内可能不会立即生效于后续命令的PATH查找
-          REM 所以直接用完整路径验证nvcc，或在下一步验证
           "%CUDA_PATH_VALUE%\bin\nvcc.exe" --version
           if %ERRORLEVEL% NEQ 0 (
             echo "nvcc verification failed using full path."
@@ -98,15 +101,12 @@ jobs:
       - name: Install pip dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ninja wheel diffusers transformers accelerate sentencepiece protobuf huggingface_hub peft opencv-python gradio spaces GPUtil
+          pip install ninja wheel diffusers transformers accelerate sentencepiece protobuf huggingface_hub peft opencv-python gradio GPUtil
 
       - name: Install PyTorch (CUDA ${{ env.CUDA_VERSION_MAJOR_MINOR }})
         run: |
-          REM 确保你的PyTorch版本和CUDA后缀是有效的。
-          REM 例如 PyTorch 2.3.x 通常对应 cu121 (CUDA 12.1)。
-          REM 你指定的 torch==2.7.0+cu126 假设是有效的。如果无效，此步骤会失败。
           pip install torch==${{ env.TORCH_VERSION }}+${{ env.TORCH_CUDA_SUFFIX }} torchvision==${{ env.TORCHVISION_VERSION }}+${{ env.TORCH_CUDA_SUFFIX }} torchaudio==${{ env.TORCHAUDIO_VERSION }}+${{ env.TORCH_CUDA_SUFFIX }} --extra-index-url https://download.pytorch.org/whl/${{ env.TORCH_CUDA_SUFFIX }}
-          python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')"
+          python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"N/A\"}')"
 
 
       - name: Build Nunchaku in Develop Mode
@@ -149,4 +149,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nunchaku-wheel-cuda${{ env.CUDA_VERSION_MAJOR_MINOR }}-py${{ env.PYTHON_VERSION }}
-          path: dist/*.whl # 确保只上传wheel文件
+          path: dist/*.whl
