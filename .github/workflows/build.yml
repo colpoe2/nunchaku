@@ -39,9 +39,10 @@ jobs:
         shell: cmd
 
       - name: Set Environment Variables for MSVC
+        shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
-          echo "MSVC environment set up."
+          echo MSVC environment set up.
 
       - name: Build Nunchaku in Develop Mode
         run: |
