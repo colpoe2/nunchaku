@@ -22,27 +22,12 @@ jobs:
       - name: Install Visual Studio Build Tools with C++ support
         shell: cmd
         run: |
-          choco install --no-progress visualstudio2022buildtools -y --package-parameters "--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended"
-
-      - name: Check if BuildTools directory exists
-        shell: cmd
-        run: |
-          if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools" (
-            echo BuildTools directory found
-          ) else (
-            echo BuildTools directory NOT found
-            exit /b 1
-          )
-          
-      - name: Search for vcvarsall.bat in both Program Files directories
-        shell: cmd
-        run: |
-          echo Searching in C:\Program Files (x86)...
-          where /r "C:\Program Files (x86)" vcvarsall.bat
+          choco install --no-progress visualstudio2022buildtools -y --package-parameters="'--add Microsoft.VisualStudio.Workload.NativeDesktop --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.20H2 --includeRecommended'"
       
-          echo.
-          echo Searching in C:\Program Files...
-          where /r "C:\Program Files" vcvarsall.bat
+      - name: Check VS Build Tools Path
+        shell: cmd
+        run: |
+          dir "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
       
       - name: Set Environment Variables for MSVC
         shell: cmd
