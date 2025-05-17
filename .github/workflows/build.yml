@@ -19,7 +19,7 @@ jobs:
         with:
           submodules: true
 
-      - name: Install Visual Studio Build Tools with C++ support
+      - name: Install Visual Studio Build Tools with full C++ support
         shell: cmd
         run: |
           choco install --no-progress visualstudio2022buildtools -y --package-parameters="'--add Microsoft.VisualStudio.Workload.NativeDesktop --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.20H2 --includeRecommended'"
