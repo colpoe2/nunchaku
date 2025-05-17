@@ -28,7 +28,7 @@ jobs:
         shell: cmd
         run: |
           echo Searching for vcvarsall.bat...
-          where /r "C:\Program Files (x86)\Microsoft Visual Studio" vcvarsall.bat
+          where /r "C:" vcvarsall.bat
       
       - name: Set Environment Variables for MSVC
         shell: cmd
