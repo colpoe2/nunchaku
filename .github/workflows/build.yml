@@ -8,25 +8,33 @@ on:
 
 jobs:
   build-windows-cuda:
-    name: Build Nunchaku (Windows + CUDA 12.6)
+    name: Build Nunchaku (Windows + CUDA ${{ env.CUDA_VERSION_MAJOR_MINOR }}) # 使用env变量
     runs-on: windows-latest
     env:
       NUNCHAKU_INSTALL_MODE: ALL
       NUNCHAKU_BUILD_WHEELS: 1
+      # 定义CUDA和Python版本以便统一管理
+      CUDA_VERSION_MAJOR_MINOR: "12.6"
+      PYTHON_VERSION: "3.12"
+      # PyTorch 版本和CUDA后缀 (请确保这个PyTorch版本和CUDA组合是有效的)
+      TORCH_VERSION: "2.7.0" # 假设这是你需要的版本
+      TORCH_CUDA_SUFFIX: "cu126" # 对应CUDA 12.6
+      TORCHVISION_VERSION: "0.22.0" # 假设
+      TORCHAUDIO_VERSION: "2.7.0" # 假设
+
     steps:
       - name: Checkout Repository with Submodules
         uses: actions/checkout@v4
         with:
           submodules: true
 
-      - name: Install Visual Studio Build Tools with full C++ support
+      - name: Install Visual Studio Build Tools
         shell: cmd
         run: |
           echo "Starting Visual Studio Build Tools installation..."
           choco install --no-progress visualstudio2022buildtools -y --package-parameters="'--add Microsoft.VisualStudio.Workload.NativeDesktop --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041 --includeRecommended --norestart --quiet'"
           set CHOC_EXIT_CODE=%ERRORLEVEL%
           echo "Chocolatey install command finished with exit code: %CHOC_EXIT_CODE%"
-      
           if %CHOC_EXIT_CODE% == 3010 (
             echo "Installation successful, reboot pending (exit code 3010). Treating as success for CI."
             exit /b 0
@@ -34,45 +42,111 @@ jobs:
             echo "Chocolatey installation failed with a critical error. Exit code: %CHOC_EXIT_CODE%"
             exit /b %CHOC_EXIT_CODE%
           )
-          echo "Chocolatey installation successful without requiring reboot or reboot was handled."
-      
-      - name: Check VS Build Tools Path
+          echo "Visual Studio Build Tools installation successful."
+
+      - name: Install CUDA Toolkit ${{ env.CUDA_VERSION_MAJOR_MINOR }}
         shell: cmd
         run: |
-          dir "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools"
-      
-      - name: Set Environment Variables for MSVC
-        shell: cmd
-        run: |
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
-          echo MSVC environment set up.
+          set CUDA_INSTALLER_FILENAME=cuda_installer.exe
+          REM **重要**: 请将下面的URL替换为NVIDIA官方CUDA Toolkit 12.6.0 (例如 February 2024 Update 1) 的稳定下载链接
+          REM 例如: https://developer.download.nvidia.com/compute/cuda/12.6.0/local_installers/cuda_12.6.0_560.74_windows.exe
+          set CUDA_DOWNLOAD_URL=https://developer.download.nvidia.com/compute/cuda/${{ env.CUDA_VERSION_MAJOR_MINOR }}.0/local_installers/cuda_${{ env.CUDA_VERSION_MAJOR_MINOR }}.0_560.74_windows.exe
+          
+          echo "Downloading CUDA Toolkit from %CUDA_DOWNLOAD_URL% ..."
+          curl -L -o %CUDA_INSTALLER_FILENAME% "%CUDA_DOWNLOAD_URL%" --retry 3 --retry-delay 5
+          if %ERRORLEVEL% NEQ 0 (
+            echo "Failed to download CUDA installer."
+            exit /b %ERRORLEVEL%
+          )
+          
+          echo "Installing CUDA Toolkit silently..."
+          REM -s 参数用于静默安装。这会安装默认的toolkit组件。
+          REM 如果需要更精细的控制，查阅特定CUDA安装程序的文档以获取更详细的静默安装选项。
+          %CUDA_INSTALLER_FILENAME% -s -noreboot
+          set CUDA_INSTALL_EXIT_CODE=%ERRORLEVEL%
+          echo "CUDA Toolkit installation finished with exit code: %CUDA_INSTALL_EXIT_CODE%"
+          REM 对于CUDA安装程序, 0 通常表示成功。3010也可能表示需要重启。
+          REM 如果nvcc可用，即使是3010，对于CI也可能接受。目前我们只接受0。
+          if %CUDA_INSTALL_EXIT_CODE% NEQ 0 (
+            echo "CUDA Toolkit installation failed or requires attention."
+            exit /b %CUDA_INSTALL_EXIT_CODE% 
+          )
+          
+          echo "Setting CUDA environment variables..."
+          set CUDA_PATH_VALUE=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ env.CUDA_VERSION_MAJOR_MINOR }}
+          echo %CUDA_PATH_VALUE%\bin>>%GITHUB_PATH%
+          echo %CUDA_PATH_VALUE%\libnvvp>>%GITHUB_PATH%
+          echo CUDA_PATH=%CUDA_PATH_VALUE%>>%GITHUB_ENV%
+          echo CUDA_HOME=%CUDA_PATH_VALUE%>>%GITHUB_ENV%
 
-      # ===== 上面是关键验证部分，下面为后续可选步骤 ===== #
+          echo "Verifying nvcc installation (using full path initially)..."
+          REM GITHUB_PATH的更新在同一脚本块内可能不会立即生效于后续命令的PATH查找
+          REM 所以直接用完整路径验证nvcc，或在下一步验证
+          "%CUDA_PATH_VALUE%\bin\nvcc.exe" --version
+          if %ERRORLEVEL% NEQ 0 (
+            echo "nvcc verification failed using full path."
+            dir "%CUDA_PATH_VALUE%\bin"
+            exit /b 1
+          )
+          echo "CUDA Toolkit installed successfully."
 
-      - name: Setup Python 3.12
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install pip dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install ninja wheel diffusers transformers accelerate sentencepiece protobuf huggingface_hub peft opencv-python gradio spaces GPUtil
 
-      - name: Install PyTorch 2.7 with CUDA 12.6
+      - name: Install PyTorch (CUDA ${{ env.CUDA_VERSION_MAJOR_MINOR }})
         run: |
-          pip install torch==2.7.0+cu126 torchvision==0.22.0+cu126 torchaudio==2.7.0+cu126 --extra-index-url https://download.pytorch.org/whl/cu126    
+          REM 确保你的PyTorch版本和CUDA后缀是有效的。
+          REM 例如 PyTorch 2.3.x 通常对应 cu121 (CUDA 12.1)。
+          REM 你指定的 torch==2.7.0+cu126 假设是有效的。如果无效，此步骤会失败。
+          pip install torch==${{ env.TORCH_VERSION }}+${{ env.TORCH_CUDA_SUFFIX }} torchvision==${{ env.TORCHVISION_VERSION }}+${{ env.TORCH_CUDA_SUFFIX }} torchaudio==${{ env.TORCHAUDIO_VERSION }}+${{ env.TORCH_CUDA_SUFFIX }} --extra-index-url https://download.pytorch.org/whl/${{ env.TORCH_CUDA_SUFFIX }}
+          python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}')"
+
 
       - name: Build Nunchaku in Develop Mode
+        shell: cmd
         run: |
+          echo "Setting up MSVC environment and building Nunchaku..."
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+          
+          echo "--- Environment Check ---"
+          echo "PATH (first few entries):"
+          echo %PATH:~0,500% 
+          echo "..."
+          echo "CUDA_PATH: %CUDA_PATH%"
+          echo "CUDA_HOME: %CUDA_HOME%"
+          echo "-------------------------"
+          echo "Looking for nvcc:"
+          where nvcc
+          if %ERRORLEVEL% NEQ 0 (
+             echo "nvcc still not found in PATH for build step!"
+             exit /b 1
+          )
+          echo "Looking for cl.exe:"
+          where cl
+          if %ERRORLEVEL% NEQ 0 (
+             echo "cl.exe not found in PATH for build step (MSVC issue)!"
+             exit /b 1
+          )
+          echo "-------------------------"
+          
           python setup.py develop
 
       - name: Build Wheel for Distribution
+        shell: cmd
         run: |
+          echo "Setting up MSVC environment and building wheel..."
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
           python -m build --wheel --no-isolation
 
       - name: Upload Wheel as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nunchaku-wheel
-          path: dist/
+          name: nunchaku-wheel-cuda${{ env.CUDA_VERSION_MAJOR_MINOR }}-py${{ env.PYTHON_VERSION }}
+          path: dist/*.whl # 确保只上传wheel文件
