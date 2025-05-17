@@ -8,18 +8,15 @@ on:
 
 jobs:
   build-windows-cuda:
-    # 修正: 直接使用版本号或简化名称，而不是在 job name 中引用同一 job 的 env 变量
     name: Build Nunchaku (Windows + CUDA 12.6)
     runs-on: windows-latest
     env:
       NUNCHAKU_INSTALL_MODE: ALL
       NUNCHAKU_BUILD_WHEELS: 1
-      # 定义CUDA和Python版本以便统一管理
       CUDA_VERSION_MAJOR_MINOR: "12.6"
       PYTHON_VERSION: "3.12"
-      # PyTorch 版本和CUDA后缀 (请确保这个PyTorch版本和CUDA组合是有效的)
       TORCH_VERSION: "2.7.0" 
-      TORCH_CUDA_SUFFIX: "cu126" # 对应CUDA 12.6
+      TORCH_CUDA_SUFFIX: "cu126" 
       TORCHVISION_VERSION: "0.22.0" 
       TORCHAUDIO_VERSION: "2.7.0" 
 
@@ -45,34 +42,57 @@ jobs:
           )
           echo "Visual Studio Build Tools installation successful."
 
-      - name: Install CUDA Toolkit ${{ env.CUDA_VERSION_MAJOR_MINOR }}
+      - name: Display Windows Version
+        shell: powershell
+        run: |
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsArchitecture, OsHardwareAbstractionLayer
+          (Get-WmiObject Win32_OperatingSystem).OSArchitecture
+          (Get-WmiObject Win32_Processor).Architecture
+          (Get-WmiObject Win32_Processor).AddressWidth # Should be 64 for 64-bit
+
+      - name: Install CUDA Toolkit ${{ env.CUDA_VERSION_MAJOR_MINOR }} (using Network Installer)
         shell: cmd
         run: |
-          set CUDA_INSTALLER_FILENAME=cuda_installer.exe
-          REM **重要**: 请将下面的URL替换为NVIDIA官方CUDA Toolkit 12.6.0 (例如 February 2024 Update 1) 的稳定下载链接
-          REM 示例 URL 结构: https://developer.download.nvidia.com/compute/cuda/<version>/local_installers/cuda_<full_version>_windows.exe
-          REM 对于 CUDA 12.6.0 (假设版本号为 12.6.0，驱动版本为 560.74 - 你需要确认实际的驱动版本和文件名)
-          set CUDA_DOWNLOAD_URL=https://developer.download.nvidia.com/compute/cuda/${{ env.CUDA_VERSION_MAJOR_MINOR }}.0/local_installers/cuda_${{ env.CUDA_VERSION_MAJOR_MINOR }}.0_560.74_windows.exe
+          set CUDA_INSTALLER_FILENAME=cuda_network_installer.exe
+          REM 使用 NVIDIA CUDA Toolkit 12.6.0 网络安装程序 (通常用于 Windows 10/11/Server x64)
+          REM 官方 CUDA 12.6.0 网络安装程序链接: https://developer.download.nvidia.com/compute/cuda/12.6.0/network_installers/cuda_12.6.0_win10_win11_network.exe
+          set CUDA_DOWNLOAD_URL=https://developer.download.nvidia.com/compute/cuda/${{ env.CUDA_VERSION_MAJOR_MINOR }}.0/network_installers/cuda_${{ env.CUDA_VERSION_MAJOR_MINOR }}.0_win10_win11_network.exe
           
-          echo "Downloading CUDA Toolkit from %CUDA_DOWNLOAD_URL% ..."
-          curl -L -o %CUDA_INSTALLER_FILENAME% "%CUDA_DOWNLOAD_URL%" --retry 3 --retry-delay 5
+          echo "Downloading CUDA Toolkit Network Installer from %CUDA_DOWNLOAD_URL% ..."
+          curl -L -o %CUDA_INSTALLER_FILENAME% "%CUDA_DOWNLOAD_URL%" --retry 3 --retry-delay 5 --fail
           if %ERRORLEVEL% NEQ 0 (
-            echo "Failed to download CUDA installer."
+            echo "Failed to download CUDA network installer. Curl exit code: %ERRORLEVEL%"
             exit /b %ERRORLEVEL%
           )
           
-          echo "Installing CUDA Toolkit silently..."
-          %CUDA_INSTALLER_FILENAME% -s -noreboot
+          echo "Verifying downloaded file exists and has size > 0..."
+          for %%F in (%CUDA_INSTALLER_FILENAME%) do (
+            if %%~zF EQU 0 (
+              echo "ERROR: Downloaded CUDA installer is 0 bytes."
+              exit /b 1
+            )
+            echo "Downloaded %CUDA_INSTALLER_FILENAME% size: %%~zF bytes"
+          )
+
+          echo "Installing CUDA Toolkit silently using Network Installer..."
+          REM -s 用于静默安装。网络安装程序将在安装过程中下载组件。
+          REM -noreboot 尝试禁止重启。
+          REM -clean 尝试执行更干净的安装。
+          %CUDA_INSTALLER_FILENAME% -s -noreboot -clean
           set CUDA_INSTALL_EXIT_CODE=%ERRORLEVEL%
-          echo "CUDA Toolkit installation finished with exit code: %CUDA_INSTALL_EXIT_CODE%"
+          echo "CUDA Toolkit Network installation finished with exit code: %CUDA_INSTALL_EXIT_CODE%"
           
-          REM 对于CUDA安装程序, 0 通常表示成功。3010也可能表示需要重启。
-          REM 如果nvcc可用，即使是3010，对于CI也可能接受。
           if %CUDA_INSTALL_EXIT_CODE% NEQ 0 (
             if %CUDA_INSTALL_EXIT_CODE% == 3010 (
-              echo "CUDA Toolkit installation successful, reboot pending (exit code 3010). Treating as success for CI."
+              echo "CUDA Toolkit installation successful (via network), reboot pending (exit code 3010). Treating as success for CI."
             ) else (
-              echo "CUDA Toolkit installation failed with exit code: %CUDA_INSTALL_EXIT_CODE%."
+              echo "CUDA Toolkit Network installation failed with exit code: %CUDA_INSTALL_EXIT_CODE%."
+              echo "Searching for NVIDIA install logs in %TEMP% and %ProgramData%..."
+              dir "%TEMP%\NVIDIA*.log" /s /b
+              dir "%TEMP%\NvidiaLogging" /s /b
+              dir "%ProgramFiles%\NVIDIA Corporation\Installer2\*.log" /s /b
+              dir "%ProgramData%\NVIDIA Corporation\Installer2\*.log" /s /b
+              dir "C:\Windows\INF\setupapi.dev.log" /b
               exit /b %CUDA_INSTALL_EXIT_CODE% 
             )
           )
@@ -85,13 +105,24 @@ jobs:
           echo CUDA_HOME=%CUDA_PATH_VALUE%>>%GITHUB_ENV%
 
           echo "Verifying nvcc installation (using full path initially)..."
-          "%CUDA_PATH_VALUE%\bin\nvcc.exe" --version
-          if %ERRORLEVEL% NEQ 0 (
-            echo "nvcc verification failed using full path."
+          REM 等待几秒钟，以防文件系统操作有延迟
+          timeout /t 5 
+          if not exist "%CUDA_PATH_VALUE%\bin\nvcc.exe" (
+            echo "nvcc.exe not found at expected location: %CUDA_PATH_VALUE%\bin\nvcc.exe"
+            echo "Listing contents of %CUDA_PATH_VALUE%\bin ..."
             dir "%CUDA_PATH_VALUE%\bin"
+            echo "Listing contents of %CUDA_PATH_VALUE% ..."
+            dir "%CUDA_PATH_VALUE%"
+            echo "Listing contents of C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA ..."
+            dir "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA"
             exit /b 1
           )
-          echo "CUDA Toolkit installed successfully."
+          "%CUDA_PATH_VALUE%\bin\nvcc.exe" --version
+          if %ERRORLEVEL% NEQ 0 (
+            echo "nvcc verification failed using full path. Exit code: %ERRORLEVEL%"
+            exit /b 1
+          )
+          echo "CUDA Toolkit installed successfully via Network Installer."
 
       - name: Setup Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v4
