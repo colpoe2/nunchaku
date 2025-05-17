@@ -56,7 +56,7 @@ jobs:
           set CUDA_INSTALLER_FILENAME=cuda_network_installer.exe
           REM 使用 NVIDIA CUDA Toolkit 12.6.0 网络安装程序 (通常用于 Windows 10/11/Server x64)
           REM 官方 CUDA 12.6.0 网络安装程序链接: https://developer.download.nvidia.com/compute/cuda/12.6.0/network_installers/cuda_12.6.0_win10_win11_network.exe
-          set CUDA_DOWNLOAD_URL=https://developer.download.nvidia.com/compute/cuda/${{ env.CUDA_VERSION_MAJOR_MINOR }}.0/network_installers/cuda_${{ env.CUDA_VERSION_MAJOR_MINOR }}.0_win10_win11_network.exe
+          set CUDA_DOWNLOAD_URL=https://developer.download.nvidia.com/compute/cuda/12.6.0/network_installers/cuda_12.6.0_windows_network.exe
           
           echo "Downloading CUDA Toolkit Network Installer from %CUDA_DOWNLOAD_URL% ..."
           curl -L -o %CUDA_INSTALLER_FILENAME% "%CUDA_DOWNLOAD_URL%" --retry 3 --retry-delay 5 --fail
