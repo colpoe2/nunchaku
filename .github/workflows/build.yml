@@ -24,10 +24,16 @@ jobs:
         run: |
           choco install --no-progress visualstudio2022buildtools -y --package-parameters "--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended"
 
-      - name: Show VS Installer logs
+      - name: Check if BuildTools directory exists
         shell: cmd
         run: |
-          type "%TEMP%\vs*.log"
+          if exist "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools" (
+            echo BuildTools directory found
+          ) else (
+            echo BuildTools directory NOT found
+            exit /b 1
+          )
+          
       - name: Search for vcvarsall.bat in both Program Files directories
         shell: cmd
         run: |
