@@ -19,17 +19,17 @@ jobs:
         with:
           submodules: true
 
-      - name: Install Visual Studio Build Tools
+      - name: Install Visual Studio Build Tools with C++ support
         shell: cmd
         run: |
-          choco install --no-progress visualstudio2022buildtools -y
+          choco install --no-progress visualstudio2022buildtools -y --package-parameters "--add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --quiet"
 
       - name: Find vcvarsall.bat
         shell: cmd
         run: |
           echo Searching for vcvarsall.bat...
           where /r "C:\Program Files (x86)\Microsoft Visual Studio" vcvarsall.bat
-
+      
       - name: Set Environment Variables for MSVC
         shell: cmd
         run: |
