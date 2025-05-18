@@ -9,7 +9,7 @@ on:
 jobs:
   build-windows-cuda:
     name: Build Nunchaku (Windows + CUDA 12.6)
-    runs-on: windows-latest
+    runs-on: windows-2019 # 已更改为 windows-2019
     env:
       NUNCHAKU_INSTALL_MODE: ALL
       NUNCHAKU_BUILD_WHEELS: 1
@@ -50,15 +50,14 @@ jobs:
           (Get-WmiObject Win32_Processor).Architecture
           (Get-WmiObject Win32_Processor).AddressWidth # Should be 64 for 64-bit
 
-      - name: Install CUDA Toolkit ${{ env.CUDA_VERSION_MAJOR_MINOR }} (using Network Installer)
+      - name: Install CUDA Toolkit ${{ env.CUDA_VERSION_MAJOR_MINOR }} (using Local Installer) # 名称更新
         shell: cmd
         run: |
-          set CUDA_INSTALLER_FILENAME=cuda_network_installer.exe
+          set CUDA_INSTALLER_FILENAME=cuda_local_installer.exe # 文件名更新
           REM 使用 NVIDIA CUDA Toolkit 12.6.0 网络安装程序 (通常用于 Windows 10/11/Server x64)
           REM 官方 CUDA 12.6.0 网络安装程序链接: https://developer.download.nvidia.com/compute/cuda/12.6.0/network_installers/cuda_12.6.0_win10_win11_network.exe
-          set CUDA_DOWNLOAD_URL=https://developer.download.nvidia.com/compute/cuda/12.6.0/network_installers/cuda_12.6.0_windows_network.exe
+          set CUDA_DOWNLOAD_URL=https://developer.download.nvidia.com/compute/cuda/12.6.0/local_installers/cuda_12.6.0_560.76_windows.exe
           
-          echo "Downloading CUDA Toolkit Network Installer from %CUDA_DOWNLOAD_URL% ..."
           curl -L -o %CUDA_INSTALLER_FILENAME% "%CUDA_DOWNLOAD_URL%" --retry 3 --retry-delay 5 --fail
           if %ERRORLEVEL% NEQ 0 (
             echo "Failed to download CUDA network installer. Curl exit code: %ERRORLEVEL%"
