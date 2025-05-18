@@ -176,6 +176,11 @@ jobs:
         run: |
           echo "Setting up MSVC environment and building wheel..."
           call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+          echo "Setting CUDA_HOME for the current script session..."
+          set "CUDA_HOME=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ env.CUDA_VERSION_MAJOR_MINOR }}"
+          echo "CUDA_HOME is now: %CUDA_HOME%"
+          set "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v${{ env.CUDA_VERSION_MAJOR_MINOR }}"
+          echo "CUDA_PATH is now: %CUDA_HOME%"
           python -m build --wheel --no-isolation
 
       - name: Upload Wheel as Artifact
